@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Shoot</title>
+  <link rel="preload" href="/fonts/Hellowin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/display.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/vendor/three/build/three.module.js",
+      "three/addons/": "/vendor/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="ui">
+    <div id="fx-flash"></div>
+
+    <header id="brand" class="display-font">Magic<span>Shoot</span></header>
+
+    <aside id="leaderboard" class="panel">
+      <h2 class="display-font">Top 10</h2>
+      <ol id="lb"></ol>
+      <p id="lb-empty" class="muted">Belum ada skor.<br>Jadilah yang pertama!</p>
+    </aside>
+
+    <aside id="join" class="panel">
+      <div class="qr-wrap"><img id="qr" alt="QR untuk bermain"></div>
+      <div class="cta display-font">Scan QR</div>
+      <div class="cta-sub">untuk bermain pakai HP-mu</div>
+      <div id="join-url"></div>
+      <div id="queue-info"></div>
+    </aside>
+
+    <div id="bubbles"></div>
+    <div id="crosshairs"></div>
+    <div id="popups"></div>
+    <div id="banners"></div>
+    <div id="countdowns"></div>
+
+    <div id="players"></div>
+    <div id="idle-hint" class="display-font">Scan QR untuk bermain!</div>
+  </div>
+
+  <div id="loading">
+    <div class="display-font title">Magic Shoot</div>
+    <div class="bar"><i id="load-bar"></i></div>
+    <div id="load-text">Memuat kelelawar...</div>
+  </div>
+
+  <div id="audio-gate" hidden>
+    <div class="display-font">Klik untuk mulai</div>
+    <p>Mengaktifkan musik &amp; efek suara &middot; tekan <b>F</b> untuk layar penuh</p>
+  </div>
+
+  <div id="net-status" hidden>Menghubungkan ke server...</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/display.js"></script>
+</body>
+</html>

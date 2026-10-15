@@ -1,0 +1,17 @@
+{
+  "name": "magicshoot",
+  "version": "1.0.0",
+  "description": "Multiplayer gyro bat shooter",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^2.4.1",
+    "socket.io": "^4.8.4",
+    "three": "^0.160.0"
+  }
+}

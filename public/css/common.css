@@ -1,0 +1,35 @@
+@font-face {
+  font-family: 'Hellowin';
+  src: url('/fonts/Hellowin.woff2') format('woff2'), url('/fonts/Hellowin.woff') format('woff'), url('/fonts/Hellowin.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hellowin Italic';
+  src: url('/fonts/Hellowin%20Italic.woff2') format('woff2'), url('/fonts/Hellowin%20Italic.woff') format('woff');
+  font-display: swap;
+}
+
+:root {
+  --bg: #12051f;
+  --panel: rgba(22, 8, 40, 0.72);
+  --panel-border: rgba(190, 120, 255, 0.35);
+  --text: #f6ecff;
+  --muted: #b9a3d6;
+  --accent: #ff8a1f;
+  --accent-2: #b14dff;
+  --good: #7cff5a;
+  --bad: #ff3b6b;
+  --gold: #ffd23b;
+  --font-display: 'Hellowin', 'Trebuchet MS', system-ui, sans-serif;
+  --font-body: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+.display-font { font-family: var(--font-display); letter-spacing: 0.04em; }

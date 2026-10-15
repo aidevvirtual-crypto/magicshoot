@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Shoot · Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { background: #0f0619; font-size: 15px; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0 16px; }
+    header h1 { margin: 0; font-family: var(--font-display); font-weight: normal; font-size: 40px; color: var(--accent); }
+    header h1 span { color: var(--accent-2); }
+    nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    nav button, .btn {
+      font: inherit; border: 1px solid var(--panel-border); background: rgba(255, 255, 255, 0.04); color: var(--text);
+      padding: 8px 14px; border-radius: 10px; cursor: pointer;
+    }
+    nav button.on { background: var(--accent); color: #1b0626; border-color: var(--accent); font-weight: 700; }
+    .btn:hover, nav button:hover { border-color: var(--accent); }
+    .btn.primary { background: var(--accent); color: #1b0626; border-color: var(--accent); font-weight: 700; }
+    .btn.danger { border-color: var(--bad); color: var(--bad); }
+    .btn.danger.solid { background: var(--bad); color: #fff; }
+    .btn.sm { padding: 4px 10px; font-size: 13px; }
+    .card { background: rgba(30, 12, 52, 0.8); border: 1px solid var(--panel-border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .stat { background: rgba(255, 255, 255, 0.04); border-radius: 12px; padding: 12px 14px; }
+    .stat b { display: block; font-family: var(--font-display); font-weight: normal; font-size: 36px; color: var(--accent); }
+    .stat small { color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 600; font-size: 13px; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td .acts { display: flex; gap: 6px; justify-content: flex-end; }
+    input, select {
+      font: inherit; background: rgba(0, 0, 0, 0.35); color: var(--text); border: 1px solid var(--panel-border);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+    .toolbar input { flex: 1; min-width: 160px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px; }
+    .field label { display: block; font-weight: 600; margin-bottom: 4px; }
+    .field small { display: block; color: var(--muted); margin-top: 3px; font-size: 12px; }
+    .field input:not([type=checkbox]) { width: 100%; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: rgba(255, 255, 255, 0.08); }
+    .muted { color: var(--muted); }
+    #login { max-width: 360px; margin: 12vh auto; }
+    #login form { display: flex; flex-direction: column; gap: 10px; }
+    .err { color: var(--bad); min-height: 1.2em; }
+    #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--good); color: #10200a; padding: 10px 18px; border-radius: 10px; font-weight: 700; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    #toast.on { opacity: 1; }
+    [hidden] { display: none !important; }
+    .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; }
+    code { background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section id="login" class="card">
+      <h2 style="font-family: var(--font-display); font-weight: normal; font-size: 32px; color: var(--accent)">Admin Login</h2>
+      <form id="login-form">
+        <input type="password" id="pw" placeholder="Password admin" autofocus>
+        <button class="btn primary" type="submit">Masuk</button>
+        <div class="err" id="login-err"></div>
+      </form>
+    </section>
+
+    <main id="main" hidden>
+      <header>
+        <h1>Magic<span>Shoot</span> <small class="muted" style="font-family: var(--font-body); font-size: 14px">admin</small></h1>
+        <nav>
+          <button data-tab="dash" class="on">Dashboard</button>
+          <button data-tab="scores">Scoreboard</button>
+          <button data-tab="players">Pemain</button>
+          <button data-tab="settings">Pengaturan</button>
+          <button id="logout">Keluar</button>
+        </nav>
+      </header>
+
+      <!-- dashboard -->
+      <section data-panel="dash">
+        <div class="card">
+          <div class="stats" id="stats"></div>
+        </div>
+        <div class="card">
+          <h2>Sedang bermain <span class="muted" id="live-meta" style="font-size: 13px; font-weight: normal"></span></h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Slot</th><th>Nama</th><th>Status</th><th class="num">Skor</th><th class="num">Kena/Tembak</th><th class="num">Sisa</th><th></th></tr></thead>
+            <tbody id="live-active"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h2>Antrean</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>#</th><th>Nama</th><th>Koneksi</th><th></th></tr></thead>
+            <tbody id="live-queue"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h2>Link</h2>
+          <div class="links">
+            <span>Display: <a href="/" target="_blank">/</a></span>
+            <span>Controller: <a id="join-link" target="_blank"></a></span>
+            <span class="muted" id="lan"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- scores -->
+      <section data-panel="scores" hidden>
+        <div class="card">
+          <h2>Scoreboard (semua permainan)
+            <span><button class="btn danger sm" id="reset-scores">Reset semua skor</button></span>
+          </h2>
+          <div class="toolbar"><input id="score-search" placeholder="Cari nama..."></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>#</th><th>Nama</th><th class="num">Skor</th><th class="num">Kena</th><th class="num">Tembak</th><th class="num">Akurasi</th><th>Waktu</th><th></th></tr></thead>
+            <tbody id="score-rows"></tbody>
+          </table></div>
+          <p class="muted" id="score-total"></p>
+        </div>
+      </section>
+
+      <!-- players -->
+      <section data-panel="players" hidden>
+        <div class="card">
+          <h2>Pemain
+            <span><button class="btn danger sm" id="reset-all">Hapus semua pemain &amp; skor</button></span>
+          </h2>
+          <div class="toolbar"><input id="player-search" placeholder="Cari nama..."></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>ID</th><th>Nama</th><th class="num">Main</th><th class="num">Terbaik</th><th>Terdaftar</th><th>Terakhir main</th><th></th></tr></thead>
+            <tbody id="player-rows"></tbody>
+          </table></div>
+          <p class="muted" id="player-total"></p>
+        </div>
+      </section>
+
+      <!-- settings -->
+      <section data-panel="settings" hidden>
+        <form class="card" id="settings-form">
+          <h2>Gameplay</h2>
+          <div class="grid">
+            <div class="field"><label>Durasi main (detik)</label><input type="number" name="gameDuration" min="5" max="600"><small>Timer tiap pemain</small></div>
+            <div class="field"><label>Pemain bersamaan</label><input type="number" name="maxPlayers" min="1" max="5"><small>Maks 5, sisanya antre</small></div>
+            <div class="field"><label>Hitung mundur (detik)</label><input type="number" name="countdown" min="0" max="10"></div>
+            <div class="field"><label>Batas tunggu START (detik)</label><input type="number" name="readyTimeout" min="10" max="600"><small>Pemain dikeluarkan jika tidak menekan START</small></div>
+            <div class="field"><label>Poin per kena</label><input type="number" name="pointsPerHit" min="1"></div>
+            <div class="field"><label>Bonus combo per tingkat</label><input type="number" name="comboBonus" min="0"><small>Combo maks 4 tingkat</small></div>
+            <div class="field"><label>Jeda tembakan (ms)</label><input type="number" name="fireCooldown" min="0" max="3000"></div>
+            <div class="field"><label>Sensitivitas gyro</label><input type="number" name="sensitivity" step="0.1" min="0.2" max="5"><small>Lebih besar = bidikan lebih cepat</small></div>
+          </div>
+        </form>
+        <form class="card" id="settings-form-2">
+          <h2>Kelelawar &amp; tampilan</h2>
+          <div class="grid">
+            <div class="field"><label>Jumlah bat minimum</label><input type="number" name="batMin" min="1" max="40"></div>
+            <div class="field"><label>Jumlah bat maksimum</label><input type="number" name="batMax" min="1" max="40"><small>Jumlah berubah acak di antara min–maks</small></div>
+            <div class="field"><label>Kecepatan bat</label><input type="number" name="batSpeed" step="0.1" min="0.2" max="4"></div>
+            <div class="field"><label>Peluang bat emas (0–1)</label><input type="number" name="goldenChance" step="0.01" min="0" max="1"><small>Bat emas = poin x3</small></div>
+            <div class="field"><label>Ayunan environment (derajat)</label><input type="number" name="envRotate" min="0" max="60"></div>
+            <div class="field"><label>Volume musik (0–1)</label><input type="number" name="bgmVolume" step="0.05" min="0" max="1"></div>
+            <div class="field"><label>Volume efek (0–1)</label><input type="number" name="sfxVolume" step="0.05" min="0" max="1"></div>
+            <div class="field"><label><input type="checkbox" name="tauntsEnabled"> Ejekan bat aktif</label></div>
+          </div>
+        </form>
+        <form class="card" id="settings-form-3">
+          <h2>Sistem</h2>
+          <div class="grid">
+            <div class="field"><label>URL publik (opsional)</label><input name="publicUrl" placeholder="https://xxxx.trycloudflare.com"><small>Kosongkan untuk memakai IP LAN otomatis. Diisi jika memakai tunnel HTTPS.</small></div>
+            <div class="field"><label>Password admin baru</label><input name="adminPassword" type="password" placeholder="(tidak diubah)" autocomplete="new-password"><small>Minimal 4 karakter</small></div>
+          </div>
+        </form>
+        <button class="btn primary" id="save-settings">Simpan pengaturan</button>
+      </section>
+    </main>
+  </div>
+  <div id="toast"></div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>

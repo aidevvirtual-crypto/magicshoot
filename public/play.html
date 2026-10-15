@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#12051f">
+  <title>Magic Shoot · Controller</title>
+  <link rel="preload" href="/fonts/Hellowin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/play.css">
+</head>
+<body>
+  <div id="app">
+    <div id="warn" hidden></div>
+
+    <!-- 1. name -->
+    <section id="s-name" class="screen">
+      <h1 class="logo display-font">Magic<span>Shoot</span></h1>
+      <p class="lead">Tembak kelelawar sebanyak-banyaknya dalam waktu singkat!</p>
+      <form id="name-form" autocomplete="off">
+        <label for="name">Nama kamu</label>
+        <input id="name" maxlength="16" placeholder="mis. Budi" required enterkeyhint="go">
+        <button class="btn primary" type="submit">Masuk</button>
+      </form>
+      <p id="name-err" class="err"></p>
+    </section>
+
+    <!-- 2. queue -->
+    <section id="s-queue" class="screen">
+      <div class="bat-spin">🦇</div>
+      <h2 class="display-font">Antrean</h2>
+      <div class="big display-font" id="queue-pos">#1</div>
+      <p class="muted">Tunggu giliranmu. Layar penuh — maksimal 5 pemain sekaligus.</p>
+      <button class="btn ghost" data-action="leave">Batal</button>
+    </section>
+
+    <!-- 3. ready -->
+    <section id="s-ready" class="screen">
+      <h2 class="display-font hello">Giliranmu, <span class="pname"></span>!</h2>
+      <div class="steps">
+        <div class="step" id="step-gyro">
+          <b>1</b>
+          <div>
+            <div>Aktifkan sensor gerak</div>
+            <button class="btn small" id="btn-gyro">Aktifkan Gyro</button>
+            <small id="gyro-status" class="muted"></small>
+          </div>
+        </div>
+        <div class="step">
+          <b>2</b>
+          <div>Pegang HP seperti pistol, <b>arahkan ke tengah layar</b>. Cari bidikan warna <span class="swatch"></span> di layar.</div>
+        </div>
+        <div class="step">
+          <b>3</b>
+          <div>Tekan START. Kamu punya <b id="dur">30</b> detik!</div>
+        </div>
+      </div>
+      <button class="btn primary huge" id="btn-start">Start</button>
+      <button class="btn ghost small" data-action="recenter">Pusatkan bidikan</button>
+      <p class="muted tiny" id="ready-left"></p>
+    </section>
+
+    <!-- 4. countdown -->
+    <section id="s-countdown" class="screen">
+      <p class="muted">Arahkan ke layar...</p>
+      <div class="cd display-font" id="cd-num">3</div>
+    </section>
+
+    <!-- 5. play -->
+    <section id="s-play" class="screen">
+      <div class="hud">
+        <div><small>Skor</small><b class="display-font" id="hud-score">0</b></div>
+        <div class="timer"><small>Waktu</small><b class="display-font" id="hud-time">30</b></div>
+      </div>
+      <div class="timebar"><i id="hud-bar"></i></div>
+      <div id="pad">
+        <div id="fire-ring" class="display-font">
+          <span>Tembak!</span>
+        </div>
+        <div id="hit-text" class="display-font"></div>
+        <p class="pad-hint" id="pad-hint">Tap di mana saja untuk menembak</p>
+      </div>
+      <div class="play-actions">
+        <button class="btn ghost small" data-action="recenter">Pusatkan</button>
+        <span id="combo" class="display-font"></span>
+      </div>
+    </section>
+
+    <!-- 6. result -->
+    <section id="s-result" class="screen">
+      <h2 class="display-font">Waktu habis!</h2>
+      <div id="record" class="display-font" hidden>Rekor baru!</div>
+      <div class="big display-font" id="res-score">0</div>
+      <p class="muted">poin</p>
+      <div class="stats">
+        <div><b id="res-rank">#-</b><small>Peringkat</small></div>
+        <div><b id="res-hits">0</b><small>Kena</small></div>
+        <div><b id="res-acc">0%</b><small>Akurasi</small></div>
+        <div><b id="res-best">0</b><small>Terbaik</small></div>
+      </div>
+      <button class="btn primary" data-action="again">Main lagi</button>
+      <button class="btn ghost small" data-action="rename">Ganti pemain</button>
+    </section>
+
+    <!-- 7. kicked / message -->
+    <section id="s-msg" class="screen">
+      <h2 class="display-font">Ups!</h2>
+      <p id="msg-text"></p>
+      <button class="btn primary" data-action="rename">Masuk lagi</button>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/play.js"></script>
+</body>
+</html>

@@ -43,7 +43,7 @@ function joinUrl() {
 }
 
 async function loadCert() {
-  const dir = path.join(ROOT, 'data', 'certs');
+  const dir = path.join(store.DATA_DIR, 'certs');
   const keyFile = path.join(dir, 'key.pem');
   const certFile = path.join(dir, 'cert.pem');
   const ipsFile = path.join(dir, 'ips.txt');
@@ -536,6 +536,8 @@ io.on('connection', socket => {
     const cert = await loadCert();
     const httpsServer = https.createServer(cert, app);
     io.attach(httpsServer);
+    // never let the optional LAN HTTPS server take the whole app down (e.g. port taken on a host)
+    httpsServer.on('error', err => console.error(`HTTPS port ${HTTPS_PORT} tidak tersedia (${err.code}); lanjut tanpa HTTPS lokal.`));
     httpsServer.listen(HTTPS_PORT, () => {
       console.log(`Admin    : http://localhost:${HTTP_PORT}/admin  (password awal: ${store.DEFAULT_SETTINGS.adminPassword})`);
       console.log(`Pemain   : ${joinUrl()}`);

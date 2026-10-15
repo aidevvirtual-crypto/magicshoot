@@ -3,7 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// DATA_DIR lets hosted deployments keep the database outside the (replaced-on-deploy) build folder
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new DatabaseSync(path.join(DATA_DIR, 'magicshoot.db'));
@@ -120,6 +121,7 @@ const q = {
 
 module.exports = {
   db,
+  DATA_DIR,
   DEFAULT_SETTINGS,
   getSettings,
   saveSettings,

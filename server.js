@@ -24,15 +24,21 @@ let settings = store.getSettings();
 
 // ---------------------------------------------------------------- network
 function lanAddresses() {
+  if (process.env.LAN_IP) return [process.env.LAN_IP];
   const out = [];
-  for (const list of Object.values(os.networkInterfaces())) {
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
     for (const a of list || []) {
-      if (a.family === 'IPv4' && !a.internal) out.push(a.address);
+      if (a.family === 'IPv4' && !a.internal) out.push({ ip: a.address, name });
     }
   }
-  // prefer typical home/office LAN ranges
-  const score = ip => (ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : ip.startsWith('172.') ? 2 : 3);
-  return out.sort((a, b) => score(a) - score(b));
+  // prefer the real Wi-Fi/Ethernet adapter over virtual ones (Windows hotspot 192.168.137.x, Hyper-V, VirtualBox, VPN...)
+  const score = ({ ip, name }) => {
+    let s = ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : ip.startsWith('172.') ? 2 : 3;
+    if (/wi-?fi|wlan|ethernet|^en|^eth/i.test(name)) s -= 10;
+    if (/vethernet|virtual|vmware|vbox|hyper-v|loopback|tailscale|zerotier|wsl|docker|local area connection\*/i.test(name) || ip.startsWith('192.168.137.')) s += 20;
+    return s;
+  };
+  return out.sort((a, b) => score(a) - score(b)).map(a => a.ip);
 }
 
 function joinUrl() {
@@ -169,6 +175,7 @@ app.put('/api/admin/settings', requireAdmin, async (req, res) => {
   settings = store.saveSettings(req.body || {});
   await refreshQr();
   io.to('display').emit('settings', displaySettings());
+  for (const p of players.values()) sendState(p);
   promoteQueue();
   pushLobby();
   res.json(settings);
@@ -256,7 +263,10 @@ function sendState(p, extra = {}) {
       : p.state === 'countdown' ? Math.max(0, p.countdownEndsAt - now)
       : p.state === 'ready' ? Math.max(0, p.readyDeadline - now) : 0,
     result: p.result || null,
-    settings: { sensitivity: settings.sensitivity, fireCooldown: settings.fireCooldown, gameDuration: settings.gameDuration, sfxVolume: settings.sfxVolume },
+    settings: {
+      sensitivity: settings.sensitivity, fireCooldown: settings.fireCooldown, gameDuration: settings.gameDuration, sfxVolume: settings.sfxVolume,
+      controlMode: settings.controlMode, swingFire: settings.swingFire, swingThreshold: settings.swingThreshold,
+    },
     displayOnline: displays.size > 0,
     ...extra,
   });
@@ -497,7 +507,10 @@ io.on('connection', socket => {
     if (!me || me.slot === null || !a) return;
     const x = Number(a.x), y = Number(a.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    socket.to('display').volatile.emit('aim', { pid: me.pid, x: Math.max(-1.2, Math.min(1.2, x)), y: Math.max(-1.2, Math.min(1.2, y)) });
+    const out = { pid: me.pid, x: Math.max(-1.2, Math.min(1.2, x)), y: Math.max(-1.2, Math.min(1.2, y)) };
+    // full phone orientation (three.js world quaternion) for the sword
+    if (Array.isArray(a.q) && a.q.length === 4 && a.q.every(Number.isFinite)) out.q = a.q.map(Number);
+    socket.to('display').volatile.emit('aim', out);
   });
 
   socket.on('fire', a => {

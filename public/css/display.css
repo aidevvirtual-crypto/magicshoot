@@ -23,6 +23,7 @@ body { overflow: hidden; cursor: default; }
 #leaderboard {
   position: absolute; top: 9.5vh; left: 1.6vw; width: clamp(220px, 19vw, 560px);
   padding: 1em 1.2em 1.1em;
+  transform: scale(0.65); transform-origin: top left;
 }
 #leaderboard h2 { margin: 0 0 0.4em; font-size: 2.4em; font-weight: normal; color: var(--gold); text-shadow: 0 0 0.4em rgba(255, 210, 59, 0.5); }
 #lb { list-style: none; margin: 0; padding: 0; counter-reset: rank; }
@@ -52,6 +53,7 @@ body { overflow: hidden; cursor: default; }
 #join {
   position: absolute; top: 1.6vh; right: 1.4vw; width: clamp(200px, 15vw, 460px);
   padding: 1em; text-align: center;
+  transform: scale(0.5); transform-origin: top right;
 }
 .qr-wrap { background: #fff; border-radius: 0.8em; padding: 0.5em; box-shadow: 0 0 1.6em rgba(255, 138, 31, 0.45); animation: qrGlow 2.4s ease-in-out infinite; }
 .qr-wrap img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
@@ -67,6 +69,7 @@ body { overflow: hidden; cursor: default; }
 #players {
   position: absolute; left: 0; right: 0; bottom: 2vh;
   display: flex; justify-content: center; align-items: flex-end; gap: 1.2vw; padding: 0 2vw;
+  transform: scale(0.5); transform-origin: bottom center;
 }
 .pcard {
   --c: #fff;

@@ -49,6 +49,9 @@ const DEFAULT_SETTINGS = {
   bgmVolume: 0.5,
   sfxVolume: 0.8,
   tauntsEnabled: true,
+  controlMode: 'sword',  // 'sword' (HP = gagang pedang, petir) | 'gun' (HP = pistol)
+  swingFire: true,       // ayunkan HP untuk menembak
+  swingThreshold: 22,    // m/s² percepatan ayunan untuk menembak
   publicUrl: '',         // override URL QR (mis. tunnel https)
   adminPassword: 'admin123',
 };
@@ -72,7 +75,9 @@ const LIMITS = {
   batMin: [1, 40], batMax: [1, 40], batSpeed: [0.2, 4], goldenChance: [0, 1],
   pointsPerHit: [1, 1000], comboBonus: [0, 1000], fireCooldown: [0, 3000],
   sensitivity: [0.2, 5], envRotate: [0, 60], bgmVolume: [0, 1], sfxVolume: [0, 1],
+  swingThreshold: [8, 60],
 };
+const ENUMS = { controlMode: ['sword', 'gun'] };
 
 function saveSettings(patch) {
   const stmt = db.prepare('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
@@ -90,6 +95,7 @@ function saveSettings(patch) {
     } else {
       value = String(raw).trim();
       if (key === 'adminPassword' && value.length < 4) continue;
+      if (ENUMS[key] && !ENUMS[key].includes(value)) continue;
     }
     stmt.run(key, String(value));
   }

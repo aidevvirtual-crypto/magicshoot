@@ -154,6 +154,15 @@
             <div class="field"><label>Bonus combo per tingkat</label><input type="number" name="comboBonus" min="0"><small>Combo maks 4 tingkat</small></div>
             <div class="field"><label>Jeda tembakan (ms)</label><input type="number" name="fireCooldown" min="0" max="3000"></div>
             <div class="field"><label>Sensitivitas gyro</label><input type="number" name="sensitivity" step="0.1" min="0.2" max="5"><small>Lebih besar = bidikan lebih cepat</small></div>
+            <div class="field"><label>Mode kontrol HP</label>
+              <select name="controlMode" style="width:100%">
+                <option value="sword">Pedang petir (HP = gagang pedang)</option>
+                <option value="gun">Pistol (HP = pistol)</option>
+              </select>
+              <small>Pemain yang sedang main ikut berubah setelah disimpan</small></div>
+            <div class="field"><label><input type="checkbox" name="swingFire"> Ayunkan HP untuk menembak</label>
+              <small>Selain tap layar &amp; tombol volume (jika didukung HP)</small></div>
+            <div class="field"><label>Kekuatan ayunan (m/s²)</label><input type="number" name="swingThreshold" min="8" max="60"><small>Lebih kecil = ayunan ringan sudah menembak</small></div>
           </div>
         </form>
         <form class="card" id="settings-form-2">

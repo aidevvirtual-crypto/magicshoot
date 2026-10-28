@@ -73,6 +73,16 @@ export const sfx = {
     noise(t, 0.18, { type: 'lowpass', freq: 900, sweepTo: 120, peak: 0.5, pan });
     tone(t, 0.12, { type: 'square', freq: 220, to: 55, peak: 0.12, pan });
   },
+  zap(pan = 0) {
+    if (!ready()) return;
+    const t = ctx.currentTime;
+    // electric crack + buzzing arc + distant rumble
+    noise(t, 0.08, { type: 'highpass', freq: 3000, peak: 0.55, pan });
+    for (let i = 0; i < 5; i++) noise(t + 0.02 + i * 0.035 + Math.random() * 0.02, 0.025, { type: 'bandpass', freq: 2500 + Math.random() * 3000, q: 3, peak: 0.3, pan });
+    tone(t, 0.22, { type: 'sawtooth', freq: 1800, to: 90, peak: 0.12, pan });
+    tone(t, 0.18, { type: 'square', freq: 60, to: 40, peak: 0.1, pan });
+    noise(t + 0.05, 0.6, { type: 'lowpass', freq: 400, sweepTo: 60, peak: 0.35, pan });
+  },
   explode(pan = 0, big = false) {
     if (!ready()) return;
     const t = ctx.currentTime;

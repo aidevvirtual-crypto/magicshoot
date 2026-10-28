@@ -10,7 +10,8 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const V3 = THREE.Vector3;
 
-let settings = { batMin: 6, batMax: 14, batSpeed: 1, goldenChance: 0.08, envRotate: 12, bgmVolume: 0.5, sfxVolume: 0.8, tauntsEnabled: true };
+let settings = { batMin: 6, batMax: 14, batSpeed: 1, goldenChance: 0.08, envRotate: 12, bgmVolume: 0.5, sfxVolume: 0.8, tauntsEnabled: true, controlMode: 'sword' };
+const swordMode = () => settings.controlMode !== 'gun';
 let isLeader = false;
 
 // ============================================================ taunts
@@ -149,9 +150,9 @@ scene.add(envPivot);
 
 // ============================================================ loading
 const loader = new GLTFLoader();
-const progress = { bat: 0, scene: 0 };
+const progress = { bat: 0, scene: 0, sword: 0 };
 function setProgress() {
-  const p = (progress.bat + progress.scene) / 2;
+  const p = (progress.bat + progress.scene + progress.sword) / 3;
   $('#load-bar').style.width = `${Math.round(p * 100)}%`;
 }
 function loadGLB(url, key) {
@@ -163,9 +164,102 @@ function loadGLB(url, key) {
 let batTemplate = null;
 let batClip = null;
 const goldMats = new Map();
+// The held weapon is the magic stick (magic_stick.glb); identifiers keep the "sword" name.
+let swordTemplate = null;
+let swordClip = null;
+let swordTipY = 2.2;            // gem centre height above the grip pivot (local units)
+const SWORD_LEN = 2.8;          // stick length in world units
+let gemInfo = null;             // { base: ImageData, mask: Float32Array, maskTex, w, h, src: Texture }
+const gemMapCache = new Map();  // player colour -> recoloured base texture
+
+// Find the gem in the stick's base texture (the bright cyan pixels) once.
+function analyseGem(mat) {
+  const src = mat.map;
+  if (!src || !src.image) return null;
+  const S = 1024;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(src.image, 0, 0, S, S);
+  const base = g.getImageData(0, 0, S, S);
+  const d = base.data;
+  const mask = new Float32Array(S * S);
+  const mc = document.createElement('canvas');
+  mc.width = mc.height = S;
+  const mg = mc.getContext('2d');
+  const md = mg.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    const r = d[i * 4], b = d[i * 4 + 2];
+    const w = clamp((b - r - 30) / 80, 0, 1); // cyan gem: blue far above red; brown wood: red above blue
+    mask[i] = w;
+    const v = Math.round(w * 255);
+    md.data[i * 4] = md.data[i * 4 + 1] = md.data[i * 4 + 2] = v;
+    md.data[i * 4 + 3] = 255;
+  }
+  mg.putImageData(md, 0, 0);
+  const maskTex = new THREE.CanvasTexture(mc);
+  maskTex.flipY = src.flipY;
+  maskTex.wrapS = src.wrapS; maskTex.wrapT = src.wrapT;
+  maskTex.colorSpace = THREE.SRGBColorSpace;
+  return { base, mask, maskTex, size: S, src };
+}
+
+// Base texture with the gem repainted in the player's colour (cached per colour).
+function gemMapFor(color) {
+  if (!gemInfo) return null;
+  const key = new THREE.Color(color).getHexString();
+  if (gemMapCache.has(key)) return gemMapCache.get(key);
+  const { base, mask, size, src } = gemInfo;
+  const col = new THREE.Color(color);
+  const tr = col.r * 255, tg = col.g * 255, tb = col.b * 255;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const out = g.createImageData(size, size);
+  const s = base.data, o = out.data;
+  for (let i = 0; i < size * size; i++) {
+    const j = i * 4, w = mask[i];
+    if (w > 0) {
+      const shade = 0.35 + 0.6 * (Math.max(s[j], s[j + 1], s[j + 2]) / 255); // keep the facets' light/dark
+      o[j] = s[j] + (Math.min(255, tr * shade) - s[j]) * w;
+      o[j + 1] = s[j + 1] + (Math.min(255, tg * shade) - s[j + 1]) * w;
+      o[j + 2] = s[j + 2] + (Math.min(255, tb * shade) - s[j + 2]) * w;
+    } else { o[j] = s[j]; o[j + 1] = s[j + 1]; o[j + 2] = s[j + 2]; }
+    o[j + 3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.flipY = src.flipY;
+  tex.wrapS = src.wrapS; tex.wrapT = src.wrapT;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  gemMapCache.set(key, tex);
+  return tex;
+}
 
 async function loadAssets() {
-  const [batG, sceneG] = await Promise.all([loadGLB('/assets/bat.glb', 'bat'), loadGLB('/assets/scene.glb', 'scene')]);
+  const [batG, sceneG, swordG] = await Promise.all([
+    loadGLB('/assets/bat.glb', 'bat'), loadGLB('/assets/scene.glb', 'scene'), loadGLB('/assets/magic_stick.glb', 'sword'),
+  ]);
+
+  // --- magic stick: shaft along +Y with the gem on top; pivot at the grip like a held wand
+  const sw = swordG.scene;
+  sw.updateMatrixWorld(true);
+  const sb = new THREE.Box3().setFromObject(sw);
+  const ssz = sb.getSize(new V3());
+  const sk = SWORD_LEN / ssz.y;
+  const gripY = sb.min.y + ssz.y * 0.22;
+  sw.scale.multiplyScalar(sk);
+  sw.position.set(-(sb.min.x + ssz.x / 2) * sk, -gripY * sk, -(sb.min.z + ssz.z / 2) * sk);
+  swordTipY = (sb.max.y - ssz.y * 0.11 - gripY) * sk; // centre of the gem cluster
+  sw.traverse(o => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    if (!gemInfo) gemInfo = analyseGem(o.material);
+  });
+  swordTemplate = new THREE.Group();
+  swordTemplate.add(sw);
+  swordClip = swordG.animations[0] || null;
 
   // --- haunted island: normalise size, centre it on the pivot so it floats in frame
   const house = sceneG.scene;
@@ -555,6 +649,178 @@ function missPuff(pos, color) {
   spriteFx(pos, { color: 0x8a7a9a, from: 0.3, to: 2.2, life: 0.5, opacity: 0.6, additive: false, map: smokeTex });
 }
 
+// ---- lightning bolt: camera-facing ribbons along a jagged path, re-jittered to flicker
+function boltPath(a, b, segs, jitter) {
+  const pts = [];
+  const dir = tmpV.subVectors(b, a);
+  const len = dir.length();
+  const side1 = new V3().crossVectors(dir, WORLD_UP).normalize();
+  if (side1.lengthSq() < 0.01) side1.set(1, 0, 0);
+  const side2 = new V3().crossVectors(dir, side1).normalize();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const env = Math.sin(Math.PI * t) * jitter * len;
+    pts.push(new V3().lerpVectors(a, b, t)
+      .addScaledVector(side1, (Math.random() - 0.5) * env)
+      .addScaledVector(side2, (Math.random() - 0.5) * env));
+  }
+  return pts;
+}
+function makeRibbon(n, color, opacity) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3));
+  const idx = [];
+  for (let i = 0; i < n - 1; i++) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  geo.setIndex(idx);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+function setRibbon(mesh, pts, width) {
+  const pos = mesh.geometry.attributes.position;
+  const view = new V3(), tan = new V3(), side = new V3();
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    tan.subVectors(pts[Math.min(i + 1, pts.length - 1)], pts[Math.max(i - 1, 0)]).normalize();
+    view.subVectors(camera.position, p);
+    const dist = view.length(); // width is per unit of distance -> constant thickness on screen
+    view.divideScalar(dist);
+    side.crossVectors(tan, view).normalize().multiplyScalar(width * dist * (i === 0 || i === pts.length - 1 ? 0.4 : 1));
+    pos.setXYZ(i * 2, p.x - side.x, p.y - side.y, p.z - side.z);
+    pos.setXYZ(i * 2 + 1, p.x + side.x, p.y + side.y, p.z + side.z);
+  }
+  pos.needsUpdate = true;
+}
+function lightning(from, to, color) {
+  const a = from.clone(), b = to.clone();
+  const SEG = 18, FSEG = 7;
+  const group = new THREE.Group();
+  const glow = makeRibbon(SEG + 1, color, 0.55);
+  const core = makeRibbon(SEG + 1, 0xffffff, 1);
+  const forks = [0, 1].map(() => ({ glow: makeRibbon(FSEG + 1, color, 0.4), core: makeRibbon(FSEG + 1, 0xffffff, 0.8) }));
+  group.add(glow, core);
+  forks.forEach(f => group.add(f.glow, f.core));
+  scene.add(group);
+  const regen = () => {
+    const main = boltPath(a, b, SEG, 0.12);
+    setRibbon(glow, main, 0.01);
+    setRibbon(core, main, 0.003);
+    for (const f of forks) {
+      const s = main[4 + Math.floor(Math.random() * (SEG - 8))];
+      const end = s.clone().add(tmpV2.randomDirection().multiplyScalar(a.distanceTo(b) * rand(0.08, 0.16)));
+      const fp = boltPath(s, end, FSEG, 0.3);
+      setRibbon(f.glow, fp, 0.006);
+      setRibbon(f.core, fp, 0.002);
+    }
+  };
+  regen();
+  spriteFx(a, { color, from: 0.4, to: 2.4, life: 0.25 });
+  spriteFx(b, { color: 0xffffff, from: 0.5, to: 3, life: 0.2 });
+  boomLight.position.copy(a);
+  boomLight.color.set(color);
+  boomLight.intensity = Math.max(boomLight.intensity, 400);
+  let tt = 0, next = 0;
+  const LIFE = 0.32;
+  addEffect({
+    update(dt) {
+      tt += dt;
+      if (tt > next) { regen(); next = tt + 0.045; }
+      const k = 1 - tt / LIFE;
+      group.traverse(o => { if (o.material) o.material.opacity = Math.max(0, k) * (o.material.color.getHex() === 0xffffff ? 1 : 0.55); });
+      return tt < LIFE;
+    },
+    dispose() {
+      scene.remove(group);
+      group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    },
+  });
+}
+
+// ---- per-player sword that mirrors the phone's orientation
+const SWORD_DEPTH = 4.6;
+const swordFwd = new V3();
+function screenAt(nx, ny, depth, out) {
+  out.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
+  camera.getWorldDirection(swordFwd);
+  return out.multiplyScalar(depth / out.dot(swordFwd)).add(camera.position);
+}
+function createSword(p) {
+  if (!swordTemplate || p.sword) return;
+  const root = new THREE.Group();
+  const model = swordTemplate.clone(true);
+  const col = new THREE.Color(p.data.color);
+  model.traverse(o => {
+    if (o.isMesh) {
+      const m = o.material = o.material.clone();
+      // gem repainted in the player's colour; only the gem glows (mask as emissive map)
+      const map = gemMapFor(p.data.color);
+      if (map) m.map = map;
+      if (m.emissive) {
+        m.emissiveMap = gemInfo ? gemInfo.maskTex : null;
+        m.emissive.copy(col);
+        m.emissiveIntensity = 2.2;
+      }
+    }
+  });
+  root.add(model);
+  const tip = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  tip.position.y = swordTipY;
+  tip.scale.setScalar(1.3);
+  root.add(tip);
+  root.visible = false;
+  scene.add(root);
+  const mixer = swordClip ? new THREE.AnimationMixer(model) : null;
+  if (mixer) mixer.clipAction(swordClip).play();
+  p.sword = { root, model, tip, mixer, q: new THREE.Quaternion(), target: new THREE.Quaternion(), charge: 0 };
+  p.sword.q.setFromEuler(new THREE.Euler(-0.3, 0, 0));
+}
+function disposeSword(p) {
+  if (!p.sword) return;
+  scene.remove(p.sword.root);
+  p.sword.root.traverse(o => { if (o.material) o.material.dispose(); });
+  p.sword = null;
+}
+const swordTmpQ = new THREE.Quaternion();
+const aimPoint = new V3();
+function updateSwords(dt) {
+  const now = performance.now();
+  for (const p of players.values()) {
+    if (!p.sword) createSword(p);
+    const s = p.sword;
+    if (!s) continue;
+    const show = swordMode() && ['ready', 'countdown', 'playing'].includes(p.data.state);
+    s.root.visible = show;
+    if (!show) continue;
+    if (s.mixer) s.mixer.update(dt);
+
+    // hilt sits just above the player's score card
+    const r = p.card.getBoundingClientRect();
+    const nx = ((r.left + r.width / 2) / innerWidth) * 2 - 1;
+    const ny = -(((r.top - innerHeight * 0.02) / innerHeight) * 2 - 1);
+    screenAt(nx, ny, SWORD_DEPTH, s.root.position);
+
+    if (p.q && now - p.qAt < 600) {
+      s.target.set(p.q[0], p.q[1], p.q[2], p.q[3]).normalize();
+    } else {
+      // no orientation stream (touch mode): point the blade at the crosshair
+      screenAt(p.smooth.x, p.smooth.y, 30, aimPoint);
+      tmpV.subVectors(aimPoint, s.root.position).normalize();
+      s.target.setFromUnitVectors(WORLD_UP, tmpV);
+    }
+    s.q.slerp(s.target, 1 - Math.exp(-22 * dt));
+    s.root.quaternion.copy(s.q);
+
+    s.charge = Math.max(0, s.charge - dt * 3);
+    s.tip.material.opacity = 0.32 + 0.12 * Math.sin(now / 90) + s.charge;
+    s.tip.scale.setScalar(1.5 + 0.2 * Math.sin(now / 140) + s.charge * 2.5);
+    s.model.traverse(o => { if (o.isMesh && o.material.emissive) o.material.emissiveIntensity = 0.75 + 0.25 * Math.sin(now / 160) + s.charge * 3; });
+  }
+}
+function swordTip(p, out) {
+  return p.sword.root.localToWorld(out.set(0, swordTipY, 0));
+}
+
 // ============================================================ HTML overlays
 const bubbleLayer = $('#bubbles');
 const bubbles = new Set();
@@ -727,6 +993,7 @@ function removePlayer(pid) {
   const p = players.get(pid);
   if (!p) return;
   players.delete(pid);
+  disposeSword(p);
   hideCountdown(p);
   p.card.classList.add('leaving');
   p.xhair.style.opacity = '0';
@@ -824,10 +1091,11 @@ function judgeShot(p, x, y) {
     if (Math.random() < 0.7) say(null, pick(TAUNTS_OUCH), { dur: 1.2, cls: 'ouch', anchor: where });
     retrigger(p.xhair, 'hit');
     const s = toScreen(where);
-    return { hit: true, golden, sx: s.nx, sy: s.ny };
+    return { hit: true, golden, sx: s.nx, sy: s.ny, point: where };
   }
   // miss: a puff in the distance + nearest bat mocks the shooter
-  missPuff(origin.clone().addScaledVector(direction, 22), p.data.color);
+  const missAt = origin.clone().addScaledVector(direction, 22);
+  missPuff(missAt, p.data.color);
   sfx.miss(pan);
   let near = null, nd = 0.45;
   for (const b of bats) {
@@ -840,7 +1108,7 @@ function judgeShot(p, x, y) {
     near.startManeuver(pick(['loop', 'roll', 'zigzag']));
     if (Math.random() < 0.6) say(near, pick(TAUNTS_MISS), { dur: 1.6 });
   }
-  return { hit: false };
+  return { hit: false, point: missAt };
 }
 
 // ============================================================ socket
@@ -914,10 +1182,11 @@ socket.on('player-done', d => {
 });
 socket.on('player-leave', ({ pid }) => removePlayer(pid));
 
-socket.on('aim', ({ pid, x, y }) => {
+socket.on('aim', ({ pid, x, y, q }) => {
   const p = players.get(pid);
   if (!p) return;
   p.aim.x = x; p.aim.y = y;
+  if (q) { p.q = q; p.qAt = performance.now(); }
   if (performance.now() - p.lastAim > 2500) { p.smooth.x = x; p.smooth.y = y; }
   p.lastAim = performance.now();
 });
@@ -928,8 +1197,14 @@ socket.on('fire', ({ pid, x, y }) => {
   p.aim.x = x; p.aim.y = y;
   p.lastAim = performance.now();
   retrigger(p.xhair, 'fire');
-  sfx.shoot(clamp(x, -1, 1) * 0.6);
-  const res = judgeShot(p, x, y);
+  const sword = swordMode() && p.sword && p.sword.root.visible;
+  if (sword) sfx.zap(clamp(x, -1, 1) * 0.6);
+  else sfx.shoot(clamp(x, -1, 1) * 0.6);
+  const { point, ...res } = judgeShot(p, x, y);
+  if (sword) {
+    p.sword.charge = 0.6;
+    lightning(swordTip(p, new V3()), point, p.data.color);
+  }
   if (isLeader) socket.emit('shot-result', { pid, ...res });
 });
 
@@ -1019,6 +1294,7 @@ function frame() {
 
   updateBubbles();
   updateCrosshairs(dt);
+  updateSwords(dt);
   updateCountdowns();
   for (const p of players.values()) renderCardStatus(p);
 

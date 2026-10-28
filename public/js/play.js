@@ -75,6 +75,9 @@ socket.on('state', st => {
     case 'ready':
       document.querySelectorAll('.pname').forEach(el => { el.textContent = st.name; });
       $('#dur').textContent = cfg.gameDuration;
+      $('#hold-hint').innerHTML = cfg.controlMode === 'gun'
+        ? 'Pegang HP seperti pistol, <b>arahkan bagian belakang HP ke tengah layar</b>. Cari bidikan warna <span class="swatch"></span> di layar.'
+        : 'Pegang HP seperti gagang pedang, <b>arahkan ujung atas HP ke tengah layar</b>. Cari pedang &amp; bidikan warna <span class="swatch"></span> di layar.';
       updateGyroStep();
       show('ready');
       if (prev !== 'ready') { navigator.vibrate?.(200); sfx.join(); }
@@ -161,25 +164,39 @@ $('#btn-start').addEventListener('click', () => {
 });
 
 // ============================================================ gyro aiming
-// Aim = direction the BACK of the phone points (works in portrait or landscape).
+// The phone's orientation is tracked as a full quaternion.
+//  - sword mode: the TOP of the phone is the blade; it points at the target
+//  - gun mode:   the BACK of the phone points at the target
 let gyroState = 'off';   // off | asking | on | denied | none
 let gotOrientation = false;
-const raw = { yaw: 0, pitch: 0 };
-const calib = { yaw: 0, pitch: 0 };
+let qEarth = [0, 0, 0, 1];          // device -> earth frame (x east, y north, z up)
+const calib = { heading: 0, pitch: 0 };
 const aim = { x: 0, y: 0 };
+let aimQ = null;                    // device orientation in the display's three.js world
 const touchAim = { x: 0, y: 0 };
 let useTouch = false;
 
+// --- tiny quaternion helpers, [x, y, z, w]
+const qAxis = (ax, ay, az, ang) => { const s = Math.sin(ang / 2); return [ax * s, ay * s, az * s, Math.cos(ang / 2)]; };
+const qMul = (a, b) => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+];
+function qRot(q, v) {
+  const [x, y, z, w] = q;
+  const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2];
+  const iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
+  return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
+}
+const Q_EARTH_TO_THREE = qAxis(1, 0, 0, -Math.PI / 2); // earth z-up/north -> three y-up/-z forward
+const pointerAxis = () => (cfg.controlMode === 'gun' ? [0, 0, -1] : [0, 1, 0]);
+
 function onOrientation(e) {
   if (e.alpha == null || e.beta == null || e.gamma == null) return;
-  const a = e.alpha * DEG, b = e.beta * DEG, g = e.gamma * DEG;
-  const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b), sg = Math.sin(g), cg = Math.cos(g);
-  // R = Rz(alpha) * Rx(beta) * Ry(gamma) applied to device -Z (out of the back)
-  const dx = -sg * ca - cg * sb * sa;
-  const dy = -sg * sa + cg * sb * ca;
-  const dz = -cg * cb;
-  raw.yaw = Math.atan2(dx, dy);
-  raw.pitch = Math.asin(clamp(dz, -1, 1));
+  // W3C: R = Rz(alpha) * Rx(beta) * Ry(gamma)
+  qEarth = qMul(qMul(qAxis(0, 0, 1, e.alpha * DEG), qAxis(1, 0, 0, e.beta * DEG)), qAxis(0, 1, 0, e.gamma * DEG));
   if (!gotOrientation) {
     gotOrientation = true;
     gyroState = 'on';
@@ -201,6 +218,10 @@ async function requestGyro() {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       const r = await DeviceOrientationEvent.requestPermission();
       if (r !== 'granted') { gyroState = 'denied'; updateGyroStep(); return; }
+      // iOS: motion (for swing-to-fire) has its own permission
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().catch(() => {});
+      }
     }
     addEventListener('deviceorientation', onOrientation);
     setTimeout(() => {
@@ -227,33 +248,56 @@ function updateGyroStep(msg) {
   useTouch = gyroState === 'none' || gyroState === 'denied';
 }
 
+// "this direction is the screen": remember the pointer's compass heading and tilt
 function recenter() {
-  calib.yaw = raw.yaw;
-  calib.pitch = raw.pitch;
+  const p = qRot(qEarth, pointerAxis());
+  calib.heading = Math.atan2(p[0], p[1]);
+  calib.pitch = Math.asin(clamp(p[2], -1, 1));
   touchAim.x = 0; touchAim.y = 0;
 }
 
 function computeAim() {
   if (useTouch || !gotOrientation) {
     aim.x = touchAim.x; aim.y = touchAim.y;
+    aimQ = null;
     return;
   }
-  let dyaw = raw.yaw - calib.yaw;
-  if (dyaw > Math.PI) dyaw -= 2 * Math.PI;
-  if (dyaw < -Math.PI) dyaw += 2 * Math.PI;
-  const dp = raw.pitch - calib.pitch;
+  // rotate so the calibrated heading faces the screen, then convert to three.js axes
+  aimQ = qMul(Q_EARTH_TO_THREE, qMul(qAxis(0, 0, 1, calib.heading), qEarth));
+  const v = qRot(aimQ, pointerAxis());
+  const yaw = Math.atan2(v[0], -v[2]);
+  const pitch = Math.asin(clamp(v[1], -1, 1)) - calib.pitch;
   const halfX = (28 / cfg.sensitivity) * DEG;   // degrees of turn to reach the screen edge
   const halfY = (16 / cfg.sensitivity) * DEG;
-  aim.x = clamp(dyaw / halfX, -1.1, 1.1);
-  aim.y = clamp(dp / halfY, -1.1, 1.1);
+  aim.x = clamp(yaw / halfX, -1.1, 1.1);
+  aim.y = clamp(pitch / halfY, -1.1, 1.1);
 }
 
-// stream aim to the display ~30 times per second
+// stream aim (+ full orientation for the sword) to the display ~30 times per second
 setInterval(() => {
   if (!S || !['ready', 'countdown', 'playing'].includes(S.state)) return;
   computeAim();
-  socket.volatile.emit('aim', { x: +aim.x.toFixed(4), y: +aim.y.toFixed(4) });
+  const msg = { x: +aim.x.toFixed(4), y: +aim.y.toFixed(4) };
+  if (aimQ) msg.q = aimQ.map(n => +n.toFixed(4));
+  socket.volatile.emit('aim', msg);
 }, 33);
+
+// ---- extra fire triggers: hardware volume keys (only some phones/browsers pass them to web pages)
+const VOLUME_KEYS = new Set(['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown']);
+addEventListener('keydown', e => {
+  if (VOLUME_KEYS.has(e.key) || [24, 25, 174, 175].includes(e.keyCode)) { e.preventDefault(); fire(); }
+});
+
+// ---- swing the phone to fire (like slashing the sword)
+let lastSwing = 0;
+addEventListener('devicemotion', e => {
+  if (!cfg.swingFire || !S || S.state !== 'playing') return;
+  const a = e.acceleration;
+  if (!a || a.x == null) return;
+  const mag = Math.hypot(a.x, a.y, a.z);
+  const now = performance.now();
+  if (mag > cfg.swingThreshold && now - lastSwing > 450) { lastSwing = now; fire(); }
+});
 
 // ============================================================ firing
 let lastFire = 0;
@@ -273,7 +317,11 @@ let padReady = false;
 function setupPad() {
   const pad = $('#pad');
   pad.classList.toggle('touch', useTouch);
-  $('#pad-hint').textContent = useTouch ? 'Geser untuk membidik · tekan tombol untuk menembak' : 'Tap di mana saja untuk menembak';
+  const sword = cfg.controlMode !== 'gun';
+  $('#fire-label').textContent = sword ? 'Petir!' : 'Tembak!';
+  $('#pad-hint').textContent = useTouch
+    ? 'Geser untuk membidik · tekan tombol untuk menembak'
+    : `Tap layar${cfg.swingFire ? ', ayunkan HP' : ''} atau tombol volume untuk ${sword ? 'melepas petir' : 'menembak'}`;
   if (padReady) return;
   padReady = true;
   let drag = null;

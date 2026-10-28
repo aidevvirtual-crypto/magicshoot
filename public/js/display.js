@@ -794,9 +794,9 @@ function updateSwords(dt) {
     if (!show) continue;
     if (s.mixer) s.mixer.update(dt);
 
-    // hilt sits just above the player's score card
+    // bottom width split into 5 equal columns, one per slot; hilt just above the score cards
     const r = p.card.getBoundingClientRect();
-    const nx = ((r.left + r.width / 2) / innerWidth) * 2 - 1;
+    const nx = -1 + (2 * ((p.data.slot ?? 0) % 5) + 1) / 5;
     const ny = -(((r.top - innerHeight * 0.02) / innerHeight) * 2 - 1);
     screenAt(nx, ny, SWORD_DEPTH, s.root.position);
 
@@ -810,6 +810,7 @@ function updateSwords(dt) {
     }
     s.q.slerp(s.target, 1 - Math.exp(-22 * dt));
     s.root.quaternion.copy(s.q);
+    s.root.scale.setScalar(clamp(camera.aspect * 1.3, 0.6, 1)); // smaller wands on portrait screens
 
     s.charge = Math.max(0, s.charge - dt * 3);
     s.tip.material.opacity = 0.32 + 0.12 * Math.sin(now / 90) + s.charge;
@@ -853,7 +854,11 @@ function updateBubbles() {
     const src = b.anchor || b.bat.pos;
     toScreen(tmpV2.copy(src).add(tmpV.set(0, 1.5 * (b.bat ? b.bat.size : 1), 0)), scr);
     b.el.style.display = scr.behind ? 'none' : '';
-    b.el.style.transform = `translate(${scr.x}px, ${scr.y}px) translate(-50%, -100%)`;
+    // keep the whole bubble on screen (narrow portrait screens)
+    const half = b.el.offsetWidth / 2 + 8;
+    const x = clamp(scr.x, half, Math.max(half, innerWidth - half));
+    const y = Math.max(scr.y, b.el.offsetHeight + 8);
+    b.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
   }
 }
 let tauntIn = 2;
@@ -935,6 +940,7 @@ function insertCard(p) {
   const box = $('#players');
   const after = [...box.children].find(c => !c.classList.contains('leaving') && +c.dataset.slot > p.data.slot);
   p.card.dataset.slot = p.data.slot;
+  p.card.style.gridColumn = String(((p.data.slot ?? 0) % 5) + 1);
   box.insertBefore(p.card, after || null);
 }
 

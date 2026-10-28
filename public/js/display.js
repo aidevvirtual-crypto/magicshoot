@@ -739,6 +739,24 @@ function lightning(from, to, color) {
 
 // ---- per-player sword that mirrors the phone's orientation
 const SWORD_DEPTH = 4.6;
+// bottom columns (0..4, left->right) filled from the centre out: centre, left, right, far left, far right.
+// The centre is never left empty: when a player leaves, only the outermost player moves into the gap.
+const CENTER_OUT = [2, 1, 3, 0, 4];
+const rankOf = col => CENTER_OUT.indexOf(col);
+function setColumn(p, col) {
+  p.col = col;
+  p.card.style.gridColumn = String(col + 1);
+}
+function placeNewPlayer(p) {
+  const used = new Set([...players.values()].filter(x => x !== p && x.col != null).map(x => x.col));
+  setColumn(p, CENTER_OUT.find(c => !used.has(c)) ?? CENTER_OUT[players.size % 5]);
+}
+function fillGap(freedCol) {
+  if (freedCol == null) return;
+  let outer = null;
+  for (const p of players.values()) if (p.col != null && (!outer || rankOf(p.col) > rankOf(outer.col))) outer = p;
+  if (outer && rankOf(outer.col) > rankOf(freedCol)) setColumn(outer, freedCol);
+}
 const swordFwd = new V3();
 function screenAt(nx, ny, depth, out) {
   out.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
@@ -796,7 +814,9 @@ function updateSwords(dt) {
 
     // bottom width split into 5 equal columns, one per slot; hilt just above the score cards
     const r = p.card.getBoundingClientRect();
-    const nx = -1 + (2 * ((p.data.slot ?? 0) % 5) + 1) / 5;
+    const targetNx = -1 + (2 * (p.col ?? 2) + 1) / 5;
+    s.nx = s.nx == null ? targetNx : s.nx + (targetNx - s.nx) * (1 - Math.exp(-6 * dt)); // glide when re-centred
+    const nx = s.nx;
     const ny = -(((r.top - innerHeight * 0.02) / innerHeight) * 2 - 1);
     screenAt(nx, ny, SWORD_DEPTH, s.root.position);
 
@@ -931,6 +951,7 @@ function ensurePlayer(d) {
     p = { data: d, card, xhair: xh, aim: { x: 0, y: 0 }, smooth: { x: 0, y: 0 }, end: 0, cdEnd: 0, lastAim: 0, lastCd: -1, lastSec: -1 };
     players.set(d.pid, p);
     insertCard(p);
+    placeNewPlayer(p);
   }
   applyPlayer(p, d);
   return p;
@@ -940,7 +961,6 @@ function insertCard(p) {
   const box = $('#players');
   const after = [...box.children].find(c => !c.classList.contains('leaving') && +c.dataset.slot > p.data.slot);
   p.card.dataset.slot = p.data.slot;
-  p.card.style.gridColumn = String(((p.data.slot ?? 0) % 5) + 1);
   box.insertBefore(p.card, after || null);
 }
 
@@ -1004,6 +1024,7 @@ function removePlayer(pid) {
   p.card.classList.add('leaving');
   p.xhair.style.opacity = '0';
   setTimeout(() => { p.card.remove(); p.xhair.remove(); }, 450);
+  fillGap(p.col);
   updateIdleHint();
 }
 

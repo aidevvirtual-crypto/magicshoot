@@ -81,7 +81,8 @@ async function loadCert() {
 
 // ---------------------------------------------------------------- express
 const app = express();
-app.use(express.json({ limit: '100kb' }));
+// inflate: false — no compressed request bodies needed; also guards against body-parser's decompression crash (fixed in 1.20.9)
+app.use(express.json({ limit: '100kb', inflate: false }));
 app.use('/assets', express.static(path.join(ROOT, 'assets'), { maxAge: '1d' }));
 app.use('/fonts', express.static(path.join(ROOT, 'fonts'), { maxAge: '7d' }));
 app.use('/music', express.static(path.join(ROOT, 'music'), { maxAge: '1d' }));
